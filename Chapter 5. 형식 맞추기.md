@@ -4,7 +4,7 @@
 
 - 코드 형식을 맞추기 위해 간단한 규칙을 정하고 그 규칙을 따라야 한다.
 
-  
+
 
 ### 형식을 맞추는 목적
 
@@ -133,6 +133,7 @@ public class ReporterConfig {
 - 서로 밀접한 개념은 한 파일에 속해야 마땅하다.
   - protected 변수를 피해야하는 이유 
     - protected 변수를 사용하면 같은 패키지내에서 쓸 수 있으니까
+    - 굳이 protected를 달면서 같은 패키지 안에서 쓰지 말고, 이미 연관성 있는 것이므로 한 파일내에 쓰는 것이 바람직하다
 
 
 
@@ -216,13 +217,13 @@ public class Assert {
 private void measureLine(String line) {
     lineCount++;
     
-    // 할당 연산자를 강조하기 위해 앞뒤에 공백을 줬다.
+    // 할당 연산자를 강조하기 위해 앞 뒤에 공백을 줬다.
     // 연산자 좌우로 공백을 주어 두 가지 주요 요소가 확실히 나뉜다는 사실이 더욱 분명해졌다.
     int lineSize = line.length();
     totalChars += lineSize;
     
-    // 함수이름과 이어진은 괄호 사이에 공백을 주지 않음으로써 함수와 인수의 밀접함을 보여준다.
-    //괄호한 인수는 공백으로 분리하고, 쉼포를 강조하여 인수가 별개라는 사실을 보여준다.
+    // 함수 이름과 이어지는 괄호 사이에 공백을 주지 않음으로써 함수와 인수의 밀접함을 보여준다.
+    // 괄호 안 인수는 공백으로 분리하고, 쉼표를 강조하여 인수가 별개라는 사실을 보여준다.
     lineWidthHistogram.addLine(lineSize, lineCount);
     recordWidestLine(lineSize);
 }
@@ -250,6 +251,18 @@ public class Quadratic {
 - 정렬이 필요한 정도로 목록이 길다면 문제는 목록 길이지 정렬 부족이 아니다.
 
 ```java
+// bad
+public class FitNesseExpediter implements ResponseSender {
+    private Socket          socket;
+    private InputStream     input;
+    private OutputStream    output;
+    private long            requestProgress;
+  
+  	this.context = context;
+    socket       = s;
+}
+
+// good
 public class FitNesseExpediter implements ResponseSender {
     private Socket socket;
     private InputStream input;
