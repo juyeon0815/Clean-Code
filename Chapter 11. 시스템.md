@@ -41,7 +41,7 @@ public Service getService() {
 [단점]
 
 - getService() 메서드가 MyServiceImpl과 생성자 인수에 명시적으로 의존한다.
-- MyServiceImpl이 무거운 객체라면 단위 테스트에서 getService 메서드를 호출하기 전에 적절한 테스 전용 객체를 service 필드에 할당해야 한다.
+- MyServiceImpl이 무거운 객체라면 단위 테스트에서 getService 메서드를 호출하기 전에 적절한 테스트 전용 객체를 service 필드에 할당해야 한다.
 - 일반 런타임 로직에다 객체 생성 로직을 섞어놓은 탓에 모든 실행 경로도 테스트해야한다.
   - 즉, 단일 책임 원칙 위반
 
@@ -127,12 +127,13 @@ public Service getService() {
   - 한 객체가 맡은 보조 책임을 새로운 객체에게 전적으로 떠넘긴다.
   - 새로운 객체는 넘겨받은 책임만 맡으므로 **단일 책임 원칙**을 지키게 된다.
 
-- 의존성 관리 맥락에서는  객체는 의존성 자체를 인스턴스로 만드는 책임은 지지 않는다. 대신에 이런 책임을 다른 전담 메커니즘에 넘겨야만 한다.
 - **진정한 의존성 주입**은 클래스가 의존성을 해결하려 시도하지 않는다. 대신 의존성을 주입하는 방법으로 설정자 메서드나 생성자 인수를 제공한다.
 
 
 
 ##### 확장
+
+> 관심사를 적절히 분리해 관리한다면 소프트웨어 아키텍처는 점진적으로 발전할 수 있다.
 
 - 오늘 주어진 사용자 스토리에 맞춰 시스템을 구현해야 한다.
 - 내일은 새로운 스토리에 맞춰 시스템을 조정하고 확장하면 된다.
@@ -143,25 +144,164 @@ public Service getService() {
 
 
 
-> 관심사를 적절히 분리해 관리한다면 소프트웨어 아키텍처는 점진적으로 발전할 수 있다.
+```java
+package com.example.banking;
+import java.util.Collections;
+import javax.ejb.*;
+
+public interface BankLocal extends java.ejb.EJBLocalObject {
+    String getStreetAddr1() throws EJBException;
+    String getStreetAddr2() throws EJBException;
+    String getCity() throws EJBException;
+    String getState() throws EJBException;
+    String getZipCode() throws EJBException;
+    void setStreetAddr1(String street1) throws EJBException;
+    void setStreetAddr2(String street2) throws EJBException;
+    void setCity(String city) throws EJBException;
+    void setState(String state) throws EJBException;
+    void setZipCode(String zip) throws EJBException;
+    Collection getAccounts() throws EJBException;
+    void setAccounts(Collection accounts) throws EJBException;
+    void addAccount(AccountDTO accountDTO) throws EJBException;
+}
+```
+
+
+
+```java
+package com.example.banking;
+import java.util.Collections;
+import javax.ejb.*;
+
+public abstract class Bank implements javax.ejb.EntityBean {
+    //비즈니스 논리
+    public abstract String getStreetAddr1();
+    public abstract String getStreetAddr2();
+    public abstract String getCity();
+    public abstract String getState();
+    public abstract String getZipCode();
+    public abstract void setStreetAddr1(String street1);
+    public abstract void setStreetAddr2(String street2);
+    public abstract void setCity(String city);
+    public abstract void setState(String state);
+    public abstract void setZipCode(String zip);
+    public abstract  getAccounts();
+    public abstract void setAccounts(Collection accounts);
+    public abstract void addAccount(AccountDTO accountDTO) {
+        InitialContext context = new InitialContext();
+        AccountHomeLocal accountHome = context.lookup("AccountHomeLocal");
+        AccountLocal account = accountHome.create(accountDTO);
+        Collection accounts = getAccounts();
+        accounts.add(account);
+    }
+    
+    //EJB 컨테이너 논리
+    public abstract void setId(Integer id);
+    public abstract Integer getId();
+    public Integer ejbCreate(Integer id) {....}
+    public void ejbPostCreate(Integer id) {....}
+    //
+}
+```
+
+- 비즈니스 논리는 EJB2 애플리케이션 컨테이너에 강하게 결합된다.
+- 비즈니스 논리가 큰 컨테이너와 밀접하게 결합된 탓에 독자적인 단위 테스트가 어렵다.
 
 
 
 ##### 횡단(cross-cutting) 관심사
 
 - EJB2 아키텍처는 일부 영역에서 관심사를 거의 완벽하게 분리한다.
+  - 원하는 트랜잭션, 보안, 영속적인 동작은 소스 코드가 아니라 배치 기술자에서 정의
+
+- 모듈화되고 캡슐화된 방식으로 영속성 방식을 구상할 수 있다.
 
 
 
 
 
+### 자바 프록시
+
+- 자바 프록시는 단순환 상황에 적합하다.
+  - 개별 객체나 클래스에서 메서드 호출을 감싸는 경우
+
+```JAVA
+// Bank.java
+import java.util.*;
+
+// 은행 추상화
+public interface Bank {
+    Collection<Account> getAccount();
+    void setAccounts(Collection<Account> accounts);
+}
+
+//BankImpl.java
+import java.util.*;
+
+//추상화를 위한 POJO구현
+public class BankImpl implements Bank {
+    private List<Account> accounts;
+    
+    public Collction<Account> getAccounts(){
+        return accounts;
+    }
+    public void setAccounts(Collection<Account> accounts) {
+        this.accounts = new ArrayList<Account>();
+        for(Account account : accounts) {
+            this.accounts.add(account);
+        }
+    }
+}
+
+//BankProxyHandler.java
+import java.lang.reflect.*;
+import java.util.*;
+
+//프록시 API가 필요한 "InvocationHandler"
+public class BankProxyHandler implements InvocationHandler {
+    private Bank bank;
+    
+    public BankProxyHandler(Bank bank) {
+        this.bank = bank;
+    }
+    
+    //InvocationHandler에 저으이된 메서드
+    public Object invoke(Object proxy, Method method, Object[] args) throws Throwable {
+        String methodName = method.getName();
+        if(methodName.equals("getAccounts")) {
+            bank.setAccounts(getAccountsFromDatabase());
+            return bank.getAccounts();
+        }
+        else if(methodName.equals("setAccounts")) {
+            bank.setAccounts((Collection<Account>) args[0]);
+            setAccountsToDatabase(back.getAccounts());
+            return null;
+        }else {
+            ...
+        }
+    }
+    
+    //세부사항
+}
+
+//다른 곳에 위치하는 코드
+Bank bank = (Bank) Proxy.newProxyInstance(
+	Bank.class.getClassLoader(),
+    new Class[] { Bank.class },
+    new BankProxyHandler(new BankImpl()));
+)
+```
+
+- 프록시를 사용하면 깨끗한 코드를 작성하기 어렵다
+- 프록시는 시스템 단위로 실행 지점을 명시하는 메커니즘을 제공하지 않는다.
 
 
 
+### 순수 자바 AOP 프레임워크
 
-
-
-
+- POJO는 엔터프라이즈 프레임워크에 의존하지 않기때문에 테스트가 개념적으로 더 쉽고 간단하다.
+- 사용자 스토리를 올바로 구현하기 쉬우며 미래 스토리에 맞춰 코드를 보수하고 개선하기 편하다.
+- EJB2에 비해 EJB3 코드가 훨씬 더 깨끗하며, 코드를 테스트하고 개선하고 보수하기 쉬워졌다.
 
 
 
@@ -170,7 +310,7 @@ public Service getService() {
 - 모듈을 나누고 관심사를 분리하면 지엽적인 관리와 결정이 가능해진다.
 - 가능한 마지막 순간까지 결정을 미루는 방법이 최선이다.
   - 최대한 정보를 모아 최선의 결정을 내리기 위해서
-  - 성급한 결정은 고객 피드백을 더 모르고, 프로젝트를 더 고민하고, 구현 방안을 더 탐험할 기회가 사라진다.
+  - 성급한 결정은 고객 피드백을 더 모으고, 프로젝트를 더 고민하고, 구현 방안을 더 탐험할 기회가 사라진다.
 
 > POJO 시스템 덕분에 최신 정보에 기반해 최선의 시점에 최적의 결정을 내리기 쉬워진다.
 >
