@@ -394,9 +394,184 @@ public class ArgsException extends Exception {
 
 
 
-​		p272 왜 독자적인 변수에 저장해유?
-
-
-
 ### String 인수
 
+- boolean 인수와 매우 유사 (HashMap 변경 후, parse/set/get 함수 수정)
+
+- int도 동일하게 진행
+- 모든 논리는 ArgumentMarshaler로 옮기고, 파생 클래스를 만들어 기능을 분산
+
+
+
+```java
+private abstract class ArgumentMarshaler {
+   protected boolean booleanValue = false;
+    ...
+    
+   public abstract void set(String s); //추상메서드 생성
+    
+   public abstract Object get();
+}
+
+private class BooleanArgumentMarshaler extends ArgumentMarshaler {
+    public void set(String s) { //메서드 구현
+        booleanValue = true;
+    }
+    
+    public Object get() {
+        return booleanValue;
+    }
+}
+```
+
+- ArgumentMarshaler 클래스에 추상 메서드 set 생성
+- BooleanArgumentMarshaler 클래스에 set 메서드 구현
+- setBooleanArg에 호출을 set으로 변경
+
+- String/Integer 인수 유형도 위와 동일한 방식으로 변경 (set/get을 옮긴 후 사용하지 않는 함수 제거)
+
+
+
+```java
+public class Args {
+    private Map<Character, ArgumentMarshaler> marshalers 
+        = new HashMap<Character, ArgumentMarshaler>();
+    
+    private void parseBooleanSchemaElement(char elementId) {
+        ArgumentMarshaler m = new BooleanArgumentMarshaler();
+        booleanArgs.put(elementId,m);
+        marshalers.put(elementId,m);
+    }
+    //String/Integer 유형도 위와 동일
+    
+    private boolean isBooleanArgs(char argChar) {
+        ArgumentMarshaler m = marshalers.get(argChar);
+        return m instanceof BooleanArgumentMarshaler;
+    }
+    //String/Integer 유형도 위와 동일
+}
+```
+
+
+
+```java
+private void setBooleanArg(char argChar, boolean value) {
+    booleanArgs.get(argChar).set("true");
+}
+
+private void setBooleanArg(ArgumentMarshaler m) {
+    try {
+        m.set("true");
+    } catch(ArgsException e) {
+        
+    }
+}
+
+private boolean getBoolean(char arg) {
+    Args.ArgumentMarshaler am = booleanArgs.get(arg);
+    return am != null && (Boolean) am.get();
+}
+
+private boolean getBoolean(char arg) {
+    Args.ArgumentMarshaler am = marshalers.get(arg);
+    boolean b = false;
+    try {
+        b = am != null && (Boolean) am.get();
+    }catch (ClassCastException e) {
+        b = false;
+    }
+    return b;
+}
+```
+
+- boolean 인수 set/get 함수 변경
+- String/Integer도 동일하게 변경
+
+- **위의 코드 변경으로 boolean 맵을 사용하는 코드 제거**
+
+
+
+### 첫 번째 리팩터링을 끝낸 후
+
+- 구조는 조금 나아졌을지 몰라도 setArgument에는 유형을 일일이 확인해야하는 코드 존재
+- setArgument에서 ArgumentMarshaler.set을 호출하고 싶어.
+  - setIntArg, setBooleanArg, setStringArg를 해당 ArgumentMarshaler 파생 클래스로 내려야한다.
+  - **인수를 여러개 넘길 시, 코드가 지저분해지므로 한 개만 넘기기 위해 args 배열을 list로 변환한 후 Iteratort를 set 함수로 전달**
+
+```java
+public class Args {
+    ....
+    private List<String> argsList;
+    
+    public Args(String schema, String[] args) throws ParseException {
+        this.schema = schema;
+        argsList = Arrays.asList(args);
+        valid = parse();
+    }
+    
+    private boolean parse() throws ParseException {
+        if (schema.length() == 0 && argsList.size()==0) 
+            return true;
+        parseSchema();
+        try {
+            parseArguments();
+        }catch (ArgsException e) {
+            
+        }
+       	return valid;
+    }
+    
+    private boolean parseArguments() throws ArgsException {
+        for(currentArgument = argsList.iterator(); currentArgument.hasNext();) {
+            String arg = currentArgument.next();
+            parseArgument(arg);
+        }
+        return true;
+    }
+    
+    private void setIntArg(ArgumentMarshaler m) throws ArgsException {
+        String parameter = null;
+        try {
+            parameter = currentArgument.next();
+            m.set(parameter);
+        } catch (NoSuchElementException e) {
+            errorCode = ErrorCode.MISSING_INTEGER;
+            throw new ArgsException();
+        } catch (ArgsException e) {
+            errorParameter = parameter;
+            errorCode = ErrorCode.INVALID_INTEGER;
+            throw e;
+        }
+    }
+    
+    private void setStringArg(ArgumentMarshaler m) throws ArgsException {
+        try {
+            m.set(currentArgument.next());
+        } catch(NoSuchElementException e) {
+            errorCode = ErrorCode.MISSING+STRING;
+            throw new ArgsException();
+        }
+    }
+    
+    private void setBooleanArg(ArgumentMarshaler m,
+                              Iterator<String> currentArugment) throws ArgsException {
+       m.set(currentArgument.next());
+    }
+}
+```
+
+- setBooleanArg에는 사실 iterator가 필요 없는데 굳이 인수로 넘긴 이유?
+  - setIntArg, setStringArg에서 필요하기 때문에
+  - setBooleanArg, setIntArg, setStringArg 함수 모두 ArgumentMarshaler의 추상 메서드로 호출하기 위해서
+
+
+
+
+
+### 결론
+
+- 소프트웨어 설계는 분할만 잘해도 품질이 크게 높아진다.
+- 관심사를 분리하면 코드를 이해하고 보수하기 훨씬 쉬워진다.
+
+- 코드는 언제나 최대한 깔끔하고 단순하게 정리하자.
+- 절대로 썩어가게 방치하면 안된다.
