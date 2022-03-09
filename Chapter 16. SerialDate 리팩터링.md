@@ -357,3 +357,322 @@ public enum Day {
 ```
 
 - weekDayCodeToString(넘어온 주 중 일자를 표현하는 문자열 반환) 메서드를 Day로 옮기고 toSring이라 명명
+
+
+
+##### [P454 - 288행 ~ P455 - 316행]
+
+- getMonths라는 메서드 중, 첫 번째 getMonths는 두 번째 getMonths 호출
+  - 두 번째 getMonths를 호출하는 메서드는 첫 번째 getMonths 뿐이기 때문에 이 둘을 합쳐 단순화, 서술적인 이름으로 변경
+
+```java
+public static String[] getMonthNames() {
+    return dateFormatSymbols.getMonths();
+}
+```
+
+
+
+##### [P455 - 326 ~ 346행]
+
+- Month enum을 만들면서 isValidMonthCode 메서드 불필요 -> 삭제
+
+
+
+##### [P456 356 ~ 377행]
+
+- monthCodeToQuarter 메서드는 **기능 욕심**으로 보인다.
+  - 기능 욕심 : 메소드가 자신이 속한 클래스보다 다른 클래스에 관심을 가지고 있는 경우
+
+- Month에 quarter라는 메서드 추가
+
+```java
+public int quarter() {
+    return 1 + (index -1)/3;
+}
+```
+
+- 이렇게 수정하고나니 Month가 아주 커져, Day enum과 일관성을 유지하도록 DayDate에서 분리해 독자적인 원시 파일로 만듬
+
+
+
+##### [P456 - 377행 ~ P457 - 426행]
+
+- 두 개의 monthCodeToString 메서드도 앞과 마찬가지고 한 메서드가 다른 메서드를 호출하며 플래그를 넘긴다.
+
+  - 메서드 인수로 플래그는 바람직하지 못하다.
+  - 출력 형식을 선택하는 플래그는 가급적 피하는 편이 좋다.
+
+  -> 두 메서드 이름 변경 및 단순화 & Month enum으로 이동
+
+```java
+public String toString() {
+    return dateFormatSymbols.getMonths()[index - 1];
+}
+
+public String toShortString() {
+    return dateFormatSymbols.getShortMonths()[index - 1];
+}
+```
+
+
+
+##### [P457 - 428행 ~ P459 - 472행]
+
+- stringToMonthCode 메서드 또한 이름 변경 & Month enum으로 이동 및 단순화
+
+```java
+public static Month parse(String s) {
+    s = s.trim();
+    for (Month m : Month.values())
+        if (m.matches(s))
+            return m;
+    
+    try {
+        return make(Integer.parseInt(s));
+    }
+    catch (NumberFormatException e) {}
+    throw new IllegalArgumentException("Invalid month " + s);
+}
+
+private boolean matches(String s) {
+    return s.equalsIgnoreCase(toString()) ||
+        s.equalsIgnoreCase(toShortString());
+}
+```
+
+
+
+##### [P459 - 495행 ~ 517행]
+
+```JAVA
+public static boolean isLeapYear(int year) {
+    boolean fourth = year % 4 == 0;
+    boolean hundredth = year % 100 == 0;
+    boolean fourHundredth = year % 400 == 0;
+    return fourth && (!hundreth || fourHundredth);
+}
+```
+
+- isLeapYear(넘어온 년도가 윤년인지 확인하는 메서드)는 더 서술적인 표현으로 가독성↑
+
+
+
+##### [P460 - 519행 ~ 536행]
+
+- leapYearCount(윤년 횟수를 반환) 메서드는 DayDate에 속하지 않기 때문에 이동
+
+
+
+##### [P460 - 538행 ~ 560행]
+
+- lastDayOfMonth(윤년을 고려해 마지막 일자를 반환) 메서드에서 사용하는 LAST_DAY_OF_MONTH 배열은 Month enum에 속하므로 옮기고 단순하게 고쳐주었다.
+
+```java
+public static int lastDayOfMonth(Month month, int year) {
+    if (month == Month.FEBRUARY && isLeapYear(year))
+        return month.lastDay() + 1;
+    else
+        return month.lastDay();
+}
+```
+
+
+
+##### [P461 - 562행 ~ 576행]
+
+- addDays(받아온 기준 날짜에 넘어온 일자일 더해 새로운 날짜를 만듬) 메서드는 DayDate 변수를 사용하므로 인스턴스 메서드로 변경
+- 해당 메서드에서 호출하는 toSerial 메서드를 toOrdinal으로 변경 및 단순화
+
+```java
+public DayDate addDays(int days) {
+    return DayDateFactory.makeDate(toOrdinal() + days);
+}
+```
+
+
+
+##### [P461 - 578행 ~ P462 - 602행]
+
+- addMonths(기준 날짜에 넘어온 달을 더해 새로운 날짜를 만듬) 매서드도 인스턴스 메서드로 변경
+- 임시 변수 설명을 사용해 좀 더 읽기 쉽게 수정
+
+```java
+public DayDate addMonths(int months) {
+    int thisMonthAsOrdinal = 12 * getYear() + getMonth().index - 1;
+    int resultMonthAsOrdinal = thisMonthAsOrdinal + months;
+    int resultYear = resultMonthAsOrdinal / 12;
+    Month resultMonth = Month.make(resultMonthAsOrdinal % 12 + 1);
+
+    int lastDayOfResultMonth = lastDayOfMonth(resultMonth, resultYear);
+    int resultDay = Math.min(getDayOfMonth(), lastDayOfResultMonth);
+    return DayDateFactory.makeDate(reusltDay, resultMonth, resultYear);
+}
+```
+
+
+
+```java
+public DayDate addYears(int years) {
+    int resultYear = getYear() + years;
+    int lastDayOfMonthResultYear = lastDayOfMonth(getMonth(), resultYear);
+    int resultDay = Math.min(getDayOfMonth(), lastDayOfMonthInResultYear);
+    return DayDateFactory.makeDate(reusltDay, getMonth(), resultYear);
+}
+```
+
+- addYears 메서드도 위와 같이 변경
+
+
+
+- 정적 메서드를 인스턴스로 메서드로 바꾸게 되면, day.addDays(5)라는 표현이 date 객체를 변경하지 않고 새 DayDate 인스턴스를 반환한다는 사실이 분명하게 드러나지 않는다.
+
+```java
+DayDate date = DateFactory.makeDate(5, Month.DECEMBER, 1952);
+date.addDays(7); // 날짜를 일주일만큼 뒤로 미룬다.
+```
+
+- addDays가 date 객체를 변경했다고 생각할 수 있기 때문에 이런 모호함을 해결하고자 이름을 변경해준다.
+
+```java
+DayDate date = oldDate.plusDays(5);
+```
+
+
+
+##### [P462 - 628행 ~ 660행]
+
+- getPreviousDayOfWeek(넘어온 주 중 일자 범위에 해당하면서 기준 날짜보다 빠른 마지막 날짜를 반환) 메서드를 단순화 & 임시 변수 설명을 사용해 가독성↑
+- 인스턴스 메서드로 변경 & 중복된 부분 제거
+
+```java
+public DayDate getPreviousDayOfWeek(Day targetDayOfWeek) {
+    int offsetToTarget = targetDayOfWeek.index - getDayOfWeek().index;
+    if (offsetToTarget >= 0)
+        offsetToTarget -= 7;
+    return plusDays(offsetToTarget);
+}
+
+public DayDate getFollowingDayOfWeek(Day targetDayOfWeek) {
+    int offsetToTarget = targetDayOfweek.index - getDayOfWeek().index;
+    if (offsetToTarget <= 0)
+        offsetToTarget += 7;
+    return plusDays(offsetToTarget);
+}
+
+public DayDate getNearestDayOfWeek(final Day targetDay) {
+    int offsetToThisWeeksTarget = targetDay.index - getDayOfWeek().index;
+    int offsetToFutureTarget = (offsetToThisWeeksTarget + 7) % 7;
+    int offsetToPreviousTarget = offsetToFutureTarget - 7;
+    if (offsetToFutureTarget > 3)
+        return plusDays(offsetToPreviousTarget);
+    else
+        return plusDays(offsetToFutureTarget);
+}
+```
+
+- getFollowingDayOfWeek, getNearestDayOfWeek 도 똑같은 원리 적용
+
+
+
+##### [P464 - 728행 ~ P465 - 740행]
+
+- getEndOfCurrentMonth(현재 달의 마지막 일자 반환) 메서드를 인스턴스 메서드로 번경 & 이름 변경
+
+```java
+public DayDate getEndOfMonth() {
+    Month month = getMonth();
+    int year = getYear();
+    int lastDay = lastDayOfMonth(month, year);
+    return DayDateFactory.makeDate(lastDay, month, year);
+}
+```
+
+
+
+**테스트 케이스 외에는 아무도 호출하지 않는 메서드와 테스트 케이스 전부 삭제**
+
+
+
+**여기서부터 추상 클래스 DayDate의 추상 메서드 부분**
+
+
+
+##### [P467 - 829행 ~ 836행]
+
+- toSerial(날짜에 대한 직렬번호 반환) 메서드 -> toOrdinal -> getOrdinalDay로 변경
+
+
+
+##### [P467 - 844행 ~ 846행]
+
+- toDate(DayDate를 java.util.date 반환) 메서드는 SpreadsheetDate에 의존하지 않기 때문에 DayDate 메서드로 옮김
+
+
+
+##### [P468 - 879행 ~ 900행]
+
+- getDayOfWeek 메서드는 SpreadsheetDate의 서수 날짜 시작 요일에 논리적 의존성을 가짐
+  - DayDate로 옮기지 X
+- DayDate에 getDayOfWeekForOrdinalZerof라는 추상 메서드를 구현하고 SpreadsheetDate에서 Day.SATURDAY를 반환하도록 구현
+
+```java
+public Day getDayOfWeek() {
+    Day startingDay = getDayOfWeekForOrdinalZero(); // 물리적 의존성
+    int startingOffset = startingDay.index - Day.SUNDAY.index;
+    return Day.make((getOrdinalDay() + startingOffset) % 7 + 1);
+}
+```
+
+
+
+##### [P470 - 982행 ~ P471 - 995행]
+
+- isInRange 메서드도 DayDate로 옮기고 번거로워 보이는 연쇄 if문을 DateInterval enum으로 옮겨 if문 제거
+
+```java
+public enum DateInterval {
+    OPEN {
+        public boolean isIn(int d, int left, int right) {
+            return d > left && d < right;
+        }
+    },
+    CLOSED_LEFT {
+        public boolean isIn(int d, int left, int right) {
+            return d >= left && d < right;
+        }
+    },
+    CLOSED_RIGHT {
+        public boolean isIn(int d, int left, int right) {
+            return d > left && d <= right;
+        }
+    },
+    CLOSED {
+        public boolean isIn(int d, int left, int right) {
+            return d >= left && d <= right;
+        }
+    };
+
+    public abstract boolean isIn(int d, int left, int right);
+}
+
+public boolean isInRange(DayDate di, DayDate d2, DateInterval interval) {
+    int left = Math.min(d1.getOrdinalDay(), d2.getOrdinalDay());
+    int right = Math.max(d1.getOrdinalDay(), d2.getOrdinalDay());
+    return interval.isIn(getOrdinalDay(), left, right);
+}
+```
+
+
+
+### 정리
+
+- 처음에 나오는 주석을 너무 오래되었기 때문에 간단하게 고치고 개선했다.
+- enum을 모두 독자적인 소스 파일로 옮겼다.
+- 정적 변수와 정적 메서드를 DateUtil이라는 새 클래스로 옮겼다.
+  - 일부 추상 메서드를 DayDate 클래스로 끌어올렸다.
+
+- Month.make를 Month.fromInt로 변경했다. 다른 enum도 똑같이 변경했다. 또한 모든 enum에 toInt() 접근자를 생성하고 index 필드를 private로 정의했다.
+- plusYears와 plusMonths에 중복을 correctLastDayOfMonth라는 새 메서드를 통해 중복을 없애 주었다.
+- 사용하던 숫자 1을 없앴다. 모두 Month.JANUARY.toInt() 혹은 Day.SUNDAY.toInt()로 적절히 변경했다. SpreadsheetDate 코드를 살펴보고 알고리즘을 조금 손봤다.
+
