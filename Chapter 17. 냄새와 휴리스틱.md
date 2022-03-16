@@ -461,3 +461,414 @@ public class MoogDiver {
 ```
 
 - 연결 소자를 생성해 시간적인 결합 노출
+
+
+
+#### [G33 : 경계 조건을 캡슐화하라]
+
+- 경계 조건은 한 곳에서 별도로 처리한다.
+
+```JAVA
+int nextLevel = level + 1; //변수로 캡슐화
+if(nextLevel < tags.length){
+    parts = new Parse(body, tags, nextLevel, offset + endTag);
+    body = null;
+}
+```
+
+
+
+#### [G34 : 함수는 추상화 수준을 한 단계만 내려가야 한다]
+
+- 함수 내 모든 문장을 추상화 수준이 동일해야 한다.
+- 추상화 수준은 함수 이름이 의미하는 작업보다 한 단계만 낮아야 한다.
+
+```JAVA
+public String render() throws Exception {
+    StringBuffer html = new StringBuffer("<hr");
+    if(size>0) {
+        html.append(" size=\"").append(size+1).append("\"");
+    }
+    html.append(">");
+    
+    return html.toString();
+}
+```
+
+- 위의 코드는 추상화 수준이 섞여있다.
+  - 수평선에 크기가 있다.
+  - HR 태그 자체의 문법
+
+
+
+```JAVA
+ public String render() throws Exception
+  {
+    HtmlTag hr = new HtmlTag("hr");
+    if (extraDashes > 0)
+      hr.addAttributes("size", hrSize(extraDashes));
+    return hr.html();
+  }
+
+  private String hrSize(int height)
+  {
+    int hrSize = height + 1;
+    return String.format("%d", hrSize);
+  }
+```
+
+- render 함수는 HR 태그만 생성하고, HTML HR 태그 문법은 HTMLTag 모듈이 처리
+- 추상화 수준을 분리함으로써 새로운 추상화 수준을 찾아낼 수 있다.
+
+
+
+#### [G35 : 설정 정보는 최상위 단계에 둬라]
+
+```JAVA
+ public static void main(String[] args) throws Exception
+  {
+    Arguments arguments = parseCommandLine(args);
+    ...
+  }
+
+  public class Arguments
+  {
+    public static final String DEFAULT_PATH = ".";
+    public static final String DEFAULT_ROOT = "FitNesseRoot";
+    public static final int DEFAULT_PORT = 80; // 기본값
+    public static final int DEFAULT_VERSION_DAYS = 14;
+    ...
+  }
+```
+
+- 첫 행은 명령행 인수의 구문은 분석한다.
+- 인수의 기본값은 Arguments클래스의 맨 처음에 나타내줌으로써 독자는 시스템의 저수준을 찾아볼 필요가 없고 변경 또한 쉽다.
+
+
+
+#### [G36 : 추이적 탐색을 피하라]
+
+- 일반적으로 한 모듈은 주변 모듈을 모를수록 좋다.
+  - EX ) a.getB().getC() 라는 형태를 사용한다면 모듈을 따라가며 시스템 전체를 파악해야한다.
+  - 만약 B과 C 사이에 Q를 넣는다면 a.getB().getC()를 모두 찾아 a.getB().getQ().getC()로 바꿔야한다.
+
+
+
+
+
+### 자바
+
+#### [J1 : 긴 import 목록을 피하고 와일드카드를 사용하라]
+
+- 패키지에서 클래스를 둘 이상 사용한다면 와일드카드를 사용해 패키지 전체를 가져와라.
+  - ex) import package.*;
+
+- import 목록을 읽기에 부담스러워 사용하는 패키지를 간단히 명시하면 충분하다.
+- 이름 충돌이나 모호성 때문에 명시적으로 import 문을 길게 나열해야 하는 경우도 있지만 이런 경우는 극히 드물다.
+
+
+
+#### [J2 : 상수는 상속하지 않는다]
+
+```JAVA
+ public class HourlyEmployee extends Employee {
+    private int tenthsWorked;
+    private double hourlyRate;
+
+    public Money calculatePay() {
+      int straightTime = Math.min(tenthsWorked, TENTHS_PER_WEEK);
+      int overTime = tenthsWorked - straightTime;
+      return new Money(
+        hourlyRate * (tenthsWorked + OVERTIME_RATE * overTime)
+      );
+    }
+    ...
+  }
+```
+
+- TENTHS_PER_WEEK와 OVERTIME_RATE 상수는 어디서 왔는지 확인불가.
+
+
+
+```JAVA
+public abstract class Employee implements PayrollConstants {
+    public abstract boolean isPayday();
+    public abstract Money calculatePay();
+    public abstract void deliverPay(Money pay);
+  }
+```
+
+- 부모 클래스에서도 해당 상수는 존재하지 X
+
+
+
+```JAVA
+ public interface PayrollConstants {
+   public static final int TENTHS_PER_WEEK = 400; // 여기
+   public static final double OVERTIME_RATE = 1.5;  / 여기
+ }
+```
+
+- 상수가 해당 계층의 가장 위에 선언
+  - 언어의 범위 규칙을 속위는 행위!
+
+- 위 방법 대신 **static import**를 사용하라
+  - static import : 일반적인 import와 다르게 메소드나 변수를 패키지, 클래스명 없이 접근가능하게 해준다.
+
+
+
+```java
+import static PayrollConstants.*;
+
+public class HourlyEmployee extends Employee {
+    private int tenthsWorked;
+    private double hourlyRate;
+
+    public Money calculatePay() {
+      int straightTime = Math.min(tenthsWorked, TENTHS_PER_WEEK);
+      int overTime = tenthsWorked - straightTime;
+      return new Money(
+        hourlyRate * (tenthsWorked + OVERTIME_RATE * overTime)
+      );
+    }
+    ...
+  }
+```
+
+
+
+#### [J3 : 상수 대 Enum]
+
+- enum을 사용하면 메서드와 필드에서도 사용할 수 있다.
+
+```java
+ public class HourlyEmployee extends Employee {
+    private int tenthsWorked;
+    HourlyPayGrade grade;
+     
+    public Money calculatePay() {
+      int straightTime = Math.min(tenthsWorked, TENTHS_PER_WEEK);
+      int overTime = tenthsWorked - straightTime;
+      return new Money(
+        grade.rate() * (tenthsWorked + OVERTIME_RATE * overTime);
+      );
+    }
+  }
+
+  public enum HourlyPayGrade {
+    APPRENTICE {
+      public double rate() {
+        return 1.0;
+      }
+    },
+    LIEUTENANT_JOURNEYMAN {
+      public double rate() {
+        return 1.2;
+      }
+    },
+    JOURNEYMAN {
+      public double rate() {
+        return 1.5;
+      }
+    },
+    MASTER {
+      public double rate() {
+        return 2.0;
+      }
+    };
+
+    public abstract double rate();
+  }
+```
+
+
+
+### 이름
+
+#### [N1 : 서술적인 이름을 사용하라]
+
+- 서술적인 이름을 신중하게 골라야하며, 소프트웨어가 진화하면 의미도 변화하므로 선택한 이름이 적합한지 자주 되돌아본다.
+- 소프트웨어 가독성의 90%는 이름이 결정하므로 시간을 들여 현명한 이름을 선택하고 유효한 상태를 유지해야한다.
+
+```JAVA
+ public int x() {
+    int q = 0;
+    int z = 0;
+    for (int kk = 0; kk < 10; kk++) {
+      if (l[z] == 10)
+      {
+        q += 10 + (l[z + 1] + l[z + 2]);
+        z += 1;
+      }
+      else if (l[z] + l[z + 1] == 10)
+      {
+        q += 10 + l[z + 2];
+        z += 2;
+      } else {
+        q += l[z] + l[z + 1];
+        z +=2;
+      }
+    }
+    return q;
+  }
+```
+
+- 함수명만 봐서는 무엇을 하는 함수인지 짐작하기 어렵다.
+
+
+
+```JAVA
+ public int score() {
+    int score = 0;
+    int frame = 0;
+    for (int frameNumber = 0; frameNumber < 10; frameNumber++) {
+      if (isStrike(frame)) {
+        score += 10 + nextTwoBallsForStrike(frame);
+        frame += 1;
+      }
+      else if (isSpare(frame)) {
+        score += 10 + nextBallForSpare(frame);
+        frame += 2;
+      } else {
+        score += twoBallsInFrame(frame);
+        frame += 2;
+      }
+    }
+    return score;
+  }
+```
+
+- 명명법에 신경써서 코드를 수정하면 코드의 의도를 금방 알 수 있다.
+
+
+
+#### [N2 : 적절한 추상화 수준에서 이름을 선택하라]
+
+- 구현을 드러내는 이름은 피하고, 클래스나 함수가 위치하는 추상화 수준을 반영하는 이름을 선택하라.
+
+```JAVA
+public interface Modem {
+    boolean dial(String phoneNumber);
+    boolean disconnect();
+    boolean send(char c);
+    char recv();
+    String getConnectedPhoneNumber()l
+  }
+
+public interface Modem {
+    boolean connect(String connectionLocator);
+    boolean disconnect();
+    boolean send(char c);
+    char recv();
+    String getConnectedLocator();
+  }
+```
+
+- 위의 코드를 아래와 같이 변경함으로써 연결 대상의 이름을 더 이상 전화번호로 제한하지 않는다.
+
+
+
+#### [N3 : 가능하다면 표준 명명법을 사용하라]
+
+- 기존 명명법을 사용하는 이름은 이해하기 더 쉽다.
+- 자바에서 객체를 문자열로 변환하는 함수를 toString이라는 이름을 많이 쓰듯, 보편적인 단어는 새로 만들어내기보다 관례를 따르는 편이 좋다.
+- 프로젝트에 유효한 의미가 담긴 이름을 많이 사용할수록 독자가 코드를 이해하기 쉬워진다.
+
+
+
+#### [N4 : 명확한 이름]
+
+- 함수나 변수의 목적을 명확히 밝히는 이름을 선택한다.
+
+
+
+#### [N5 : 긴 멈위는 긴 이름을 사용하라]
+
+- 이름 길이는 범위 길이에 비례해야 한다.
+- 범위가 작으면 짧은 이름을 사용해도 괜찮지만 이름 범위가 길수록 정확하고 길게 짓는다.
+
+
+
+#### [N6 : 인코딩을 피하라]
+
+- 이름에 유형 정보나 범위 정보를 넣어서는 안된다.
+  - ex)  접두어 m, f : 중복된 정보로 독자만 혼란하게 만든다.
+
+
+
+##### [N7 : 이름으로 부수 효과를 설명하라]
+
+- 함수, 변수, 클래스가 하는 일을 모두 기술하는 이름을 사용한다.
+
+```JAVA
+public ObjectOutputStream getOos() throws IOException {
+    if (m_oos == null) {
+      m_oos = new ObjectOutputStream(m_socket.getOutputStream());
+    }
+    return m_oos;
+  }
+```
+
+- getOos() 메서드는 단순히 oos만 가져오지 않고, 만약 oos가 없으면 새로 생성하는 역할도 하고있다.
+- 따라서 생성과 반환의 기능을 모두 나타낼 수 있는 createOrReturnOos 라는 이름이 더 적합하다.
+
+
+
+### 테스트
+
+#### [T1 : 불충분한 테스트]
+
+- 테스트 케이스가 확인하지 않는 조건이나 검증하지 않는 계산이 있다면 그 테스트는 불완전한다.
+- 테스트 케이스는 잠재적으로 꺠질 만한 부분을 모두 테스트해야 한다.
+
+
+
+#### [T2 : 커버리지 도구를 사용하라!]
+
+- 커버리지 도구를 사용하면 테스트가 불충분한 모듈, 클래스, 함수를 찾기가 쉬워진다.
+
+- 대다수 IDE는 테스트 커버리지를 시작적으로 표현해, 전혀 실행되지 않는 if 혹은 case문 블록이 금방 드러난다.
+
+
+
+#### [T3 : 사소한 테스트를 건너뛰지 마라]
+
+- 사소한 테스트가 제공하는 문서적 가치는 구현에 드는 비용을 넘어선다.
+
+
+
+#### [T4 : 무시한 테스트는 모호함을 뜻한다]
+
+- 불분명한 요구사항은 테스트 케이스를 주석으로 처리하거나 테스트 케이스에 @Ignore를 붙여 표현한다.
+
+
+
+#### [T5 : 경계 조건을 테스트하라]
+
+- 알고리즘 중앙 조건은 올바로 짜놓고 경계 조건에서 실수하는 경우가 흔하기 때문에 경계 조건은 각별히 신경써서 테스트한다.
+
+
+
+#### [T6 : 버그 주변은 철저히 테스트하라]
+
+- 버그는 서로 모이는 경향이 있어, 한 함수에서 버그를 발견했다면 그 함수를  철저히 테스트하는 편이 좋다.
+
+
+
+#### [T7 : 실패 패턴을 살펴라]
+
+- 테스트 케이스가 실패하는 패턴으로 문제를 진단할 수 있다.
+- 테스트 케이스를 최대한 꼼꼼히 짠다면 실패 패턴을 발견할 수 있다.
+
+
+
+#### [T8 : 테스트 커버리지 패턴을 살펴라]
+
+- 통과하는 테스트가 실행하거나 실행하지 않는 코드를 살펴보면 실패하는 테스트 케이스의 실패 원인을 찾을 수 있다.
+
+
+
+#### [T9 : 테스트는 빨라야 한다]
+
+- 느린 테스트 케이스는 실행하지 않게 된다.
+- 그러므로 테스트 케이스가 빨리 돌아가게 최대한 노력한다.
